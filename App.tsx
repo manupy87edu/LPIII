@@ -1,13 +1,87 @@
 
 import React, { useState } from 'react';
-import { BookOpen, GraduationCap, Layout, Users, FileCode, CheckCircle, Clock, Menu, X, ChevronDown, ChevronRight, PlayCircle, Folder, Lock, LogOut, Mic, MonitorPlay, Terminal } from 'lucide-react';
+import { BookOpen, GraduationCap, Layout, Users, FileCode, CheckCircle, Clock, Menu, X, ChevronDown, ChevronRight, PlayCircle, Folder, Lock, LogOut, Mic, MonitorPlay, Terminal, FileText } from 'lucide-react';
+import Markdown, { Components } from 'react-markdown';
+import rehypeRaw from 'rehype-raw';
 import { Role, UnitId, ClassSession, User, ContentBlock as ContentBlockType } from './types';
 import { SYLLABUS, COURSE_INFO } from './constants';
 import CodeBlock from './components/CodeBlock';
 import LoginScreen from './components/LoginScreen';
+import ExamView from './components/ExamView';
+import TeacherExams from './components/TeacherExams';
+import StudentExams from './components/StudentExams';
+import { InteractiveDiagram, InteractiveInlineQuiz, InteractiveCodeFill, InteractiveTallerGuiado, InteractiveMatch, InteractiveGamePreview, MainAssignmentBlock } from './components/AutonomousBlocks';
 
 // Simple Router States
-type View = 'dashboard' | 'unit' | 'class';
+type View = 'dashboard' | 'unit' | 'class' | 'exams';
+
+const markdownComponents: Components = {
+  code(props) {
+    const {children, className, node, ...rest} = props
+    const match = /language-(\w+)/.exec(className || '')
+    return match ? (
+      <CodeBlock
+        code={String(children).replace(/\n$/, '')}
+        language={match[1]}
+      />
+    ) : (
+      <code {...rest} className={className}>
+        {children}
+      </code>
+    )
+  }
+};
+
+const InteractiveEventsComponent = () => {
+    const [eventLog, setEventLog] = useState<string>("Esperando acciones del usuario...");
+    
+    return (
+        <div className="flex flex-col items-center justify-center p-8 bg-gradient-to-r from-purple-900/40 to-pink-900/40 rounded-xl shadow-inner border border-purple-500/30 my-4 text-center">
+            <h3 className="text-xl font-bold text-purple-400 mb-4">Generador de Eventos</h3>
+            <p className="text-sm text-slate-300 mb-6">Interactúa con los elementos abajo para ver cómo el navegador 'dispara' los eventos.</p>
+            
+            <div className="flex gap-4 flex-wrap justify-center items-center">
+                <button 
+                    onClick={() => {
+                        window.alert('¡Evento click detectado!');
+                        setEventLog('Evento: click (Botón clickeado)');
+                    }} 
+                    className="px-6 py-3 bg-indigo-600 text-white rounded-lg shadow-md hover:bg-indigo-500 active:scale-95 transition-all text-sm font-bold"
+                >
+                    ¡Haz Clic Aquí!
+                </button>
+                
+                <div 
+                    onMouseEnter={(e) => {
+                        (e.target as HTMLElement).innerText = '¡Estás encima!';
+                        setEventLog('Evento: mouseenter (Cursor sobre la caja)');
+                    }} 
+                    onMouseLeave={(e) => {
+                        (e.target as HTMLElement).innerText = 'Pasa el cursor';
+                        setEventLog('Evento: mouseleave (Cursor salió de la caja)');
+                    }} 
+                    className="px-6 py-3 bg-pink-600 text-white rounded-lg shadow-md cursor-pointer transition-all flex items-center justify-center w-40 text-sm font-bold select-none"
+                >
+                    Pasa el cursor
+                </div>
+                
+                <input 
+                    type="text" 
+                    placeholder="Escribe algo aquí..." 
+                    onInput={(e) => setEventLog('Evento: input - Valor actual: "' + (e.target as HTMLInputElement).value + '"')}
+                    className="px-4 py-3 rounded-lg border border-purple-500/50 bg-[#1e1e1e] text-white focus:border-purple-400 focus:outline-none w-48 text-sm placeholder:text-slate-500" 
+                />
+            </div>
+            
+            <div className="mt-8 p-4 bg-black/40 rounded-lg shadow-md border border-dark-border w-full max-w-md mx-auto">
+                <p className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Consola de Eventos</p>
+                <p className="text-emerald-400 font-mono text-sm min-h-[1.5rem] flex items-center justify-center m-0">
+                    {eventLog}
+                </p>
+            </div>
+        </div>
+    );
+};
 
 function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -21,16 +95,34 @@ function App() {
     if (!currentUser) return true;
     if (currentUser.role === Role.TEACHER) return false;
     
-    // Student Logic: Only HTML is open
-    return unitId !== UnitId.HTML;
+    // Student Logic: HTML, CSS, and JS are open
+    return unitId !== UnitId.HTML && unitId !== UnitId.CSS && unitId !== UnitId.JS;
   };
 
   const isClassLocked = (unitId: UnitId, classId: number): boolean => {
     if (!currentUser) return true;
     if (currentUser.role === Role.TEACHER) return false;
 
-    // Student Logic: Only Class 1 in HTML unit is open
-    if (unitId === UnitId.HTML && classId === 1) return false;
+    // Student Logic: Class 1, 2, 3, 4, 5 and Exam (100) in HTML unit are open
+    if (unitId === UnitId.HTML && (classId === 1 || classId === 2 || classId === 3 || classId === 4 || classId === 5 || classId === 100)) return false;
+    
+    // Student Logic: Unit II (CSS) up to class 5 (Classes 6, 7, 8, 9, 10) are open
+    if (unitId === UnitId.CSS && (classId === 6 || classId === 7 || classId === 8 || classId === 9 || classId === 10)) return false;
+
+    // Student Logic: Unit III (JS) Classes 11, 12, 13, 14, and 15 are open
+    if (unitId === UnitId.JS && (classId === 11 || classId === 12 || classId === 13 || classId === 14 || classId === 15)) return false;
+
+    return true;
+  };
+
+  const isClassVisible = (unitId: UnitId, cls: ClassSession): boolean => {
+    if (!currentUser) return false;
+    if (currentUser.role === Role.TEACHER) return true;
+    
+    // Hide Exam in Unit 1 from students
+    if (unitId === UnitId.HTML && cls.type === 'Examen') {
+      return false;
+    }
     
     return true;
   };
@@ -83,20 +175,26 @@ function App() {
             
             {block.type === 'script' && (
                 <div className="bg-[#1e1e1e] border-l-4 border-yellow-500 p-4 rounded-r-lg shadow-md">
-                    <p className="text-yellow-100/90 whitespace-pre-wrap font-medium">{block.content}</p>
+                    <div className="prose prose-invert prose-sm max-w-none text-yellow-100/90 font-medium">
+                        <Markdown rehypePlugins={[rehypeRaw]} components={markdownComponents}>{block.content}</Markdown>
+                    </div>
                 </div>
             )}
 
             {block.type === 'theory' && (
                 <div className="prose prose-invert max-w-none text-slate-300">
-                    <p>{block.content}</p>
+                    <Markdown rehypePlugins={[rehypeRaw]} components={markdownComponents}>{block.content}</Markdown>
                 </div>
             )}
 
             {block.type === 'image' && (
                 <div className="rounded-xl overflow-hidden border border-dark-border shadow-lg bg-black/20">
                     <img src={block.imageUrl} alt={block.title} className="w-full h-auto object-contain max-h-[400px]" />
-                    {block.content && <div className="bg-dark-card p-3 text-xs text-center text-slate-500 italic">{block.content}</div>}
+                    {block.content && (
+                        <div className="bg-dark-card p-3 text-xs text-center text-slate-500 italic">
+                            <Markdown rehypePlugins={[rehypeRaw]} components={markdownComponents}>{block.content}</Markdown>
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -110,11 +208,42 @@ function App() {
                         <PlayCircle size={24} />
                         <span>Actividad Práctica</span>
                     </div>
-                    <p className="text-slate-200 whitespace-pre-wrap">{block.content}</p>
-                    {currentUser.role === Role.STUDENT && (
-                        <button className="mt-4 text-sm bg-emerald-700 hover:bg-emerald-600 text-white px-4 py-2 rounded transition shadow-lg shadow-emerald-900/50">Subir Solución</button>
-                    )}
+                    <div className="prose prose-invert max-w-none text-slate-200">
+                        <Markdown rehypePlugins={[rehypeRaw]} components={markdownComponents}>{block.content}</Markdown>
+                    </div>
                 </div>
+            )}
+            
+            {block.type === 'interactive-events' && (
+                <InteractiveEventsComponent />
+            )}
+
+            {block.type === 'interactive-diagram' && (
+                <InteractiveDiagram />
+            )}
+            
+            {block.type === 'interactive-quiz' && (
+                <InteractiveInlineQuiz block={block} />
+            )}
+
+            {block.type === 'interactive-code-fill' && (
+                <InteractiveCodeFill block={block} />
+            )}
+
+            {block.type === 'interactive-match' && (
+                <InteractiveMatch block={block} />
+            )}
+
+            {block.type === 'game-preview' && (
+                <InteractiveGamePreview block={block} />
+            )}
+
+            {block.type === 'main-assignment' && (
+                <MainAssignmentBlock block={block} />
+            )}
+
+            {block.type === 'taller-guiado' && (
+                <InteractiveTallerGuiado block={block} />
             )}
         </section>
       ));
@@ -162,7 +291,7 @@ function App() {
               {/* Submenu for classes if unit selected */}
               {selectedUnitId === unit.id && !locked && (
                   <div className="bg-[#0f172a] py-1 animate-slide-down">
-                      {unit.classes.map(cls => {
+                      {unit.classes.filter(cls => isClassVisible(unit.id, cls)).map(cls => {
                         const classLocked = isClassLocked(unit.id, cls.id);
                         return (
                           <button
@@ -175,7 +304,7 @@ function App() {
                               `}
                           >
                               {classLocked ? <Lock size={10} /> : <div className={`w-1 h-1 rounded-full ${selectedClass?.id === cls.id ? 'bg-brand-500' : 'bg-slate-600'}`}></div>}
-                              Clase {cls.id}
+                              {cls.type === 'Examen' ? 'Examen' : `Clase ${cls.id}`}
                           </button>
                         );
                       })}
@@ -186,11 +315,54 @@ function App() {
         })}
       </div>
 
-      <div className="p-4 border-t border-dark-border bg-slate-900/50">
-        <div className="flex items-center gap-3 mb-3">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-brand-500 to-brand-700 flex items-center justify-center text-xs font-bold text-white uppercase shadow-lg shadow-brand-900/50">
-            {currentUser.role === Role.TEACHER ? 'D' : 'A'}
+      <div className="mt-auto flex flex-col">
+        {currentUser.role === Role.TEACHER ? (
+          <div className="p-4 border-t border-dark-border bg-slate-900/50">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                Herramientas Docente
+            </p>
+            <button
+                onClick={() => {
+                    setCurrentView('exams');
+                    if (window.innerWidth < 768) setIsSidebarOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 text-sm ${
+                    currentView === 'exams'
+                        ? 'bg-brand-500/10 text-brand-400 font-medium'
+                        : 'text-slate-400 hover:bg-[#1e1e1e] hover:text-slate-200'
+                }`}
+            >
+                <FileText size={16} />
+                Banco de Exámenes
+            </button>
           </div>
+        ) : (
+          <div className="p-4 border-t border-dark-border bg-slate-900/50">
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                Práctica y Repaso
+            </p>
+            <button
+                onClick={() => {
+                    setCurrentView('exams');
+                    if (window.innerWidth < 768) setIsSidebarOpen(false);
+                }}
+                className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 text-sm ${
+                    currentView === 'exams'
+                        ? 'bg-brand-500/10 text-brand-400 font-medium'
+                        : 'text-slate-400 hover:bg-[#1e1e1e] hover:text-slate-200'
+                }`}
+            >
+                <FileText size={16} />
+                Taller de Repaso
+            </button>
+          </div>
+        )}
+
+        <div className="p-4 border-t border-dark-border bg-slate-900/50">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-tr from-brand-500 to-brand-700 flex items-center justify-center text-xs font-bold text-white uppercase shadow-lg shadow-brand-900/50">
+              {currentUser.role === Role.TEACHER ? 'D' : 'A'}
+            </div>
           <div className="overflow-hidden">
             <p className="text-sm text-white font-medium truncate">{currentUser.name}</p>
             <p className="text-xs text-slate-400 truncate capitalize">{currentUser.role.toLowerCase()}</p>
@@ -202,6 +374,7 @@ function App() {
         >
           <LogOut size={14} /> Cerrar Sesión
         </button>
+      </div>
       </div>
     </aside>
   );
@@ -277,7 +450,7 @@ function App() {
                         <p className="text-slate-400 mb-6">{unit.description}</p>
                         
                         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-                            {unit.classes.map(cls => {
+                            {unit.classes.filter(cls => isClassVisible(unit.id, cls)).map(cls => {
                               const classLocked = isClassLocked(unit.id, cls.id);
                               return (
                                 <div 
@@ -310,6 +483,17 @@ function App() {
   const renderClassView = () => {
     if (!selectedClass) return null;
 
+    if (selectedClass.type === 'Examen' && selectedClass.exams) {
+        return (
+            <div className="max-w-5xl mx-auto p-8 animate-fade-in">
+                 <button onClick={() => selectedUnitId ? setCurrentView('unit') : setCurrentView('dashboard')} className="flex items-center gap-2 text-slate-400 hover:text-white mb-6 transition">
+                    <ChevronDown size={16} className="rotate-90"/> Volver
+                </button>
+                <ExamView exams={selectedClass.exams} userRole={currentUser.role} />
+            </div>
+        );
+    }
+
     return (
         <div className="max-w-5xl mx-auto p-8 animate-fade-in">
             <button onClick={() => selectedUnitId ? setCurrentView('unit') : setCurrentView('dashboard')} className="flex items-center gap-2 text-slate-400 hover:text-white mb-6 transition">
@@ -326,7 +510,7 @@ function App() {
             </header>
 
             {/* TEACHER EXCLUSIVE VIEW */}
-            {currentUser.role === Role.TEACHER && selectedClass.teacherGuide && (
+            {currentUser.role === Role.TEACHER && (selectedClass.teacherGuide || selectedClass.contentBlocks.some(b => b.teacherSolution)) && (
                 <div className="mb-16 animate-slide-up">
                     <div className="bg-yellow-900/10 border border-yellow-600/30 rounded-xl overflow-hidden">
                         <div className="bg-yellow-900/20 px-6 py-4 border-b border-yellow-600/30 flex items-center gap-3">
@@ -337,7 +521,26 @@ function App() {
                              </div>
                         </div>
                         <div className="p-8 space-y-8 bg-[#161208]">
-                             {renderContentBlocks(selectedClass.teacherGuide)}
+                             {selectedClass.teacherGuide && renderContentBlocks(selectedClass.teacherGuide)}
+                             
+                             {/* Render solutions for tasks here */}
+                             {selectedClass.contentBlocks.filter(b => b.type === 'task' && b.teacherSolution).map((block, idx) => (
+                                 <div key={`solution-${idx}`} className="mt-8 pt-8 border-t border-yellow-800/50">
+                                     <details className="group">
+                                         <summary className="flex items-center gap-2 text-yellow-500 font-semibold cursor-pointer hover:text-yellow-400 transition-colors">
+                                             <ChevronRight size={18} className="transition-transform group-open:rotate-90" />
+                                             Solución: {block.title}
+                                         </summary>
+                                         <div className="mt-4">
+                                             <CodeBlock 
+                                                 code={block.teacherSolution!} 
+                                                 language={block.teacherSolutionLanguage || 'html'} 
+                                                 title="Código Propuesto" 
+                                             />
+                                         </div>
+                                     </details>
+                                 </div>
+                             ))}
                         </div>
                     </div>
                 </div>
@@ -415,6 +618,8 @@ function App() {
         {currentView === 'dashboard' && renderDashboard()}
         {currentView === 'unit' && renderDashboard()} 
         {currentView === 'class' && renderClassView()}
+        {currentView === 'exams' && currentUser.role === Role.TEACHER && <TeacherExams onBack={() => setCurrentView('dashboard')} />}
+        {currentView === 'exams' && currentUser.role === Role.STUDENT && <StudentExams username={currentUser.username} onBack={() => setCurrentView('dashboard')} />}
 
       </main>
     </div>
